@@ -88,6 +88,16 @@ function resolveApiBaseUrl(){
     return normalizeApiBase(window.ORB_API_BASE_URL);
   }
 
+  const host = window.location.hostname.toLowerCase();
+  const knownFrontendHosts = new Set([
+    'cool-orb.netlify.app',
+    'game-orbs.vercel.app',
+    'bobzack881-hue.github.io'
+  ]);
+  if(knownFrontendHosts.has(host)){
+    return 'https://game-orbs-api.onrender.com';
+  }
+
   if(window.location.protocol === 'file:') return 'http://localhost:8000';
   return '';
 }
