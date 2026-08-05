@@ -67,7 +67,33 @@ let highScore = 0;
 let currentUser = null;
 let authToken = null;
 let currentUserData = null;
-const API_BASE_URL = window.location.protocol === 'file:' ? 'http://localhost:8000' : '';
+
+function normalizeApiBase(value){
+  if(!value) return '';
+  return String(value).trim().replace(/\/+$/, '');
+}
+
+function resolveApiBaseUrl(){
+  const urlParam = new URLSearchParams(window.location.search).get('api');
+  if(urlParam){
+    const normalized = normalizeApiBase(urlParam);
+    localStorage.setItem('orbMazeApiBaseUrl', normalized);
+    return normalized;
+  }
+
+  const stored = normalizeApiBase(localStorage.getItem('orbMazeApiBaseUrl'));
+  if(stored) return stored;
+
+  if(typeof window.ORB_API_BASE_URL === 'string' && window.ORB_API_BASE_URL.trim()){
+    return normalizeApiBase(window.ORB_API_BASE_URL);
+  }
+
+  if(window.location.protocol === 'file:') return 'http://localhost:8000';
+  return '';
+}
+
+const API_BASE_URL = resolveApiBaseUrl();
+const AUTH_SERVER_ERROR_MESSAGE = 'Cannot reach account server. If using a hosted website, append ?api=https://your-backend-domain or set localStorage key orbMazeApiBaseUrl.';
 
 let enemyCount = 10;
 let currentMode = 'Medium';
@@ -295,7 +321,7 @@ async function handleLogin(){
     gameState = 'start';
     updateUserUI();
   } catch (error) {
-    showStatus('Cannot reach server. Start backend: python3 server.py', true);
+    showStatus(AUTH_SERVER_ERROR_MESSAGE, true);
   }
 }
 
@@ -322,7 +348,7 @@ async function handleSignup(){
     gameState = 'start';
     updateUserUI();
   } catch (error) {
-    showStatus('Cannot reach server. Start backend: python3 server.py', true);
+    showStatus(AUTH_SERVER_ERROR_MESSAGE, true);
   }
 }
 
