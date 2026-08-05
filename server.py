@@ -92,6 +92,24 @@ def find_username_case_insensitive(username):
     return None
 
 
+def find_username_for_login(username, password):
+    requested = (username or '').strip()
+    if not requested:
+        return None
+
+    # Prefer exact-case username first for predictable behavior.
+    exact_user = USERS.get(requested)
+    if exact_user and exact_user.get('passwordHash') == hash_password(password):
+        return requested
+
+    target = requested.lower()
+    pwd_hash = hash_password(password)
+    for existing, user in USERS.items():
+        if existing.lower() == target and user.get('passwordHash') == pwd_hash:
+            return existing
+    return None
+
+
 class APIHandler(SimpleHTTPRequestHandler):
     def do_OPTIONS(self):
         self.send_response(200)
@@ -142,9 +160,9 @@ class APIHandler(SimpleHTTPRequestHandler):
         if not username or not password:
             self.send_json({'message': 'Username and password are required.'}, 400)
             return
-        actual_username = find_username_case_insensitive(username)
+        actual_username = find_username_for_login(username, password)
         user = USERS.get(actual_username) if actual_username else None
-        if not user or user.get('passwordHash') != hash_password(password):
+        if not user:
             self.send_json({'message': 'Invalid username or password.'}, 401)
             return
         token = make_token()
