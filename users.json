@@ -50,6 +50,78 @@
       "teleportLevel": 0,
       "fastFeetLevel": 0,
       "passiveLevel": 0
+    },
+    "newuser_check_01": {
+      "passwordHash": "6ca13d52ca70c883e0f0bb101e425a89e8624de51db2d2392593af6a84118090",
+      "highScore": 0,
+      "tokens": 0,
+      "ownedBoost": false,
+      "ownedTeleport": false,
+      "ownedFastFeet": false,
+      "ownedPassive": false,
+      "equipped": [],
+      "stunKey": "e",
+      "boostKey": "Space",
+      "colors": {
+        "player": "#66e",
+        "enemy": "#e34d4d",
+        "wall": "#87cefa",
+        "orb": "#ffd166",
+        "finish": "#2ecc71"
+      },
+      "characterLevel": 0,
+      "boostLevel": 0,
+      "teleportLevel": 0,
+      "fastFeetLevel": 0,
+      "passiveLevel": 0
+    },
+    "newuser_ui_check_02": {
+      "passwordHash": "6ca13d52ca70c883e0f0bb101e425a89e8624de51db2d2392593af6a84118090",
+      "highScore": 0,
+      "tokens": 0,
+      "ownedBoost": false,
+      "ownedTeleport": false,
+      "ownedFastFeet": false,
+      "ownedPassive": false,
+      "equipped": [],
+      "stunKey": "e",
+      "boostKey": "Space",
+      "colors": {
+        "player": "#66e",
+        "enemy": "#e34d4d",
+        "wall": "#87cefa",
+        "orb": "#ffd166",
+        "finish": "#2ecc71"
+      },
+      "characterLevel": 0,
+      "boostLevel": 0,
+      "teleportLevel": 0,
+      "fastFeetLevel": 0,
+      "passiveLevel": 0
+    },
+    "RiSpO": {
+      "passwordHash": "253c2e786c2414dcaec8dbf11df515b5075371454b93a5687d24d96ddbf3b939",
+      "highScore": 0,
+      "tokens": 0,
+      "ownedBoost": false,
+      "ownedTeleport": false,
+      "ownedFastFeet": false,
+      "ownedPassive": false,
+      "equipped": [],
+      "stunKey": "e",
+      "boostKey": "Space",
+      "colors": {
+        "player": "#66e",
+        "enemy": "#e34d4d",
+        "wall": "#87cefa",
+        "orb": "#ffd166",
+        "finish": "#2ecc71"
+      },
+      "characterLevel": 0,
+      "boostLevel": 0,
+      "teleportLevel": 0,
+      "fastFeetLevel": 0,
+      "passiveLevel": 0
     }
   },
   "sessions": {
@@ -63,6 +135,14 @@
     "ZgR57mfPAtpWzRsBw4dNtZ6rugPvPD_a": "rispo",
     "TTrtVh6m2WJA1D3RyQJSO2PNk--hhMUG": "rispo",
     "AL2lRTHOzGoW-eMkUhpEJKeVKQSzjjdw": "rispo",
-    "efqZVxa_Cb2FNu5haoycq_609W7Zf0tc": "rispo"
+    "efqZVxa_Cb2FNu5haoycq_609W7Zf0tc": "rispo",
+    "zw8wLuKP73FL9gED9zInp4NV0WWsLuII": "testuser1",
+    "nR90PKvWa-7dpjwP-LeVBhOFSVIwQQvk": "newuser_check_01",
+    "gxiGlr-vBneJ1tbD8ghyBGsXHlawP5Q4": "testuser1",
+    "RKich9WmnPiPPgkCyIbai79dLiOt_Lkr": "newuser_ui_check_02",
+    "CYtTu1NGJanOB6Uo7TEsZt5fkPQeMH8L": "rispo",
+    "E24r62FTpujvpr7Fkrgw2KmZ1CxD4hPz": "RiSpO",
+    "lsnHhfT7hDTr2V-ZnlIfry-LSJAxnLpV": "rispo",
+    "w3CG8lcZlIOKO3q0mQIOgY_NOYtbT9iw": "rispo"
   }
 }

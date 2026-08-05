@@ -66,6 +66,16 @@ def parse_json_body(length, rfile):
         return {}
 
 
+def find_username_case_insensitive(username):
+    target = (username or '').strip().lower()
+    if not target:
+        return None
+    for existing in USERS.keys():
+        if existing.lower() == target:
+            return existing
+    return None
+
+
 class APIHandler(SimpleHTTPRequestHandler):
     def do_OPTIONS(self):
         self.send_response(200)
@@ -96,7 +106,7 @@ class APIHandler(SimpleHTTPRequestHandler):
         if not username or not password:
             self.send_json({'message': 'Username and password are required.'}, 400)
             return
-        if username in USERS:
+        if find_username_case_insensitive(username):
             self.send_json({'message': 'Username already exists.'}, 400)
             return
         USERS[username] = {
@@ -116,14 +126,15 @@ class APIHandler(SimpleHTTPRequestHandler):
         if not username or not password:
             self.send_json({'message': 'Username and password are required.'}, 400)
             return
-        user = USERS.get(username)
+        actual_username = find_username_case_insensitive(username)
+        user = USERS.get(actual_username) if actual_username else None
         if not user or user.get('passwordHash') != hash_password(password):
             self.send_json({'message': 'Invalid username or password.'}, 401)
             return
         token = make_token()
-        SESSIONS[token] = username
+        SESSIONS[token] = actual_username
         save_data()
-        self.send_json({'username': username, 'token': token, 'user': user})
+        self.send_json({'username': actual_username, 'token': token, 'user': user})
 
     def handle_me(self):
         auth = self.headers.get('Authorization', '')
