@@ -11,18 +11,87 @@ def resolve_data_file():
     if env_override:
         return pathlib.Path(env_override)
 
-    # Hosted environments can have read-only source dirs; use /tmp when PORT is set.
-    if os.environ.get('PORT'):
-        return pathlib.Path('/tmp/game-orbs-users.json')
+    # 1) Render persistent disk (if configured): use mounted disk path.
+    render_disk = os.environ.get('RENDER_DISK_PATH', '').strip()
+    if render_disk:
+        return pathlib.Path(render_disk) / 'game-orbs-users.json'
 
+    # 2) Common Render disk mount path (if present).
+    var_data = pathlib.Path('/var/data')
+    if var_data.exists() and var_data.is_dir():
+        return var_data / 'game-orbs-users.json'
+
+    # 3) Project-local file (works for local dev and many hosts).
     return pathlib.Path(__file__).parent / 'users.json'
 
 
 DATA_FILE = resolve_data_file()
 
-if not DATA_FILE.exists():
-    DATA_FILE.parent.mkdir(parents=True, exist_ok=True)
-    DATA_FILE.write_text(json.dumps({'users': {}, 'sessions': {}}), encoding='utf-8')
+
+def load_json_file(path):
+    if not path.exists() or not path.is_file():
+        return None
+    try:
+        with open(path, 'r', encoding='utf-8') as f:
+            parsed = json.load(f)
+        if isinstance(parsed, dict):
+            return parsed
+    except Exception:
+        return None
+    return None
+
+
+def ensure_data_file_exists():
+    global DATA_FILE
+    if DATA_FILE.exists():
+        return
+
+    try:
+        DATA_FILE.parent.mkdir(parents=True, exist_ok=True)
+        DATA_FILE.write_text(json.dumps({'users': {}, 'sessions': {}}), encoding='utf-8')
+    except OSError:
+        # Last-resort fallback for strict read-only hosts.
+        DATA_FILE = pathlib.Path('/tmp/game-orbs-users.json')
+        DATA_FILE.parent.mkdir(parents=True, exist_ok=True)
+        if not DATA_FILE.exists():
+            DATA_FILE.write_text(json.dumps({'users': {}, 'sessions': {}}), encoding='utf-8')
+
+
+def migrate_legacy_data_if_needed():
+    current = load_json_file(DATA_FILE)
+    if current and current.get('users'):
+        return
+
+    candidates = []
+    local_file = pathlib.Path(__file__).parent / 'users.json'
+    if local_file != DATA_FILE:
+        candidates.append(local_file)
+    candidates.append(pathlib.Path('/tmp/game-orbs-users.json'))
+
+    # Pick the legacy file with most users/tokens/high score signal.
+    best = None
+    best_score = (-1, -1, -1)
+    for candidate in candidates:
+        payload = load_json_file(candidate)
+        if not payload:
+            continue
+        users = payload.get('users', {}) if isinstance(payload.get('users', {}), dict) else {}
+        sessions = payload.get('sessions', {}) if isinstance(payload.get('sessions', {}), dict) else {}
+        if not users:
+            continue
+        total_tokens = sum(int((u or {}).get('tokens', 0) or 0) for u in users.values())
+        max_score = max([int((u or {}).get('highScore', 0) or 0) for u in users.values()] + [0])
+        score = (len(users), total_tokens, max_score)
+        if score > best_score:
+            best_score = score
+            best = {'users': users, 'sessions': sessions}
+
+    if best:
+        with open(DATA_FILE, 'w', encoding='utf-8') as f:
+            json.dump(best, f, indent=2)
+
+ensure_data_file_exists()
+migrate_legacy_data_if_needed()
 
 with open(DATA_FILE, 'r', encoding='utf-8') as f:
     try:
