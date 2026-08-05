@@ -38,6 +38,7 @@
     </span>
     <span style="margin-left:10px">Tokens: <span id="tokens">0</span></span>
     <button id="return-menu" type="button">Menu</button>
+    <button id="play-again-btn" type="button" style="display:none;">Play Again</button>
     <button id="open-shop" type="button">Shop</button>
     <button id="sign-out" type="button">Sign Out</button>
   </div>
@@ -50,6 +51,7 @@
         <div class="home-actions">
           <button id="home-play" type="button">Play</button>
           <button id="home-open-shop" type="button">Shop</button>
+          <button id="home-upgrades" type="button">Upgrades</button>
           <button id="home-inventory" type="button">Inventory</button>
           <button id="home-settings" type="button">Settings</button>
           <button id="home-signout" type="button">Sign Out</button>
@@ -93,6 +95,15 @@
           <div class="preview-title">Select an item</div>
           <div class="preview-description">Click an ability to view details and equip it.</div>
           <div class="preview-details" id="inventory-preview-details"></div>
+          <div class="inventory-upgrade-card" id="inventory-upgrade-card">
+            <div class="inventory-upgrade-header">
+              <span>Upgrade</span>
+              <span id="inventory-upgrade-level">Level 0/3</span>
+            </div>
+            <div class="inventory-upgrade-cost" id="inventory-upgrade-cost">Cost: 40 Tokens</div>
+            <button id="inventory-upgrade-btn" type="button" class="inventory-upgrade-btn">Upgrade</button>
+            <div class="preview-status" id="inventory-upgrade-status"></div>
+          </div>
           <div class="button-row">
             <button id="inventory-save" type="button">Save</button>
             <button id="inventory-close" type="button">Close</button>
@@ -127,6 +138,57 @@
           <button id="settings-back-main" type="button" class="back-btn">Back</button>
         </div>
         <div id="settings-status" class="status-text"></div>
+      </div>
+    </div>
+  </div>
+  <div id="upgrades-overlay">
+    <div id="upgrades-box">
+      <div class="shop-header">
+        <div class="shop-title">Upgrades</div>
+        <button id="upgrades-close-btn" class="close-btn" type="button">×</button>
+      </div>
+      <div class="upgrades-tokens">Tokens: <span id="upgrades-tokens">0</span></div>
+      <div class="upgrades-grid">
+        <div class="upgrade-card character-card">
+          <div class="upgrade-card-title">Speed Upgrade</div>
+          <div class="upgrade-description">Increase base movement speed each level.</div>
+          <div class="upgrade-progress-bar">
+            <div class="upgrade-progress-fill" id="speed-upgrade-fill"></div>
+          </div>
+          <div class="upgrade-level-row">
+            <span>Level <strong id="speed-upgrade-level">0</strong>/10</span>
+            <span id="speed-upgrade-cost">Cost: 20</span>
+          </div>
+          <button id="speed-upgrade-btn" type="button">Upgrade Speed</button>
+          <div class="preview-status" id="speed-upgrade-status"></div>
+        </div>
+        <div class="upgrade-card character-card">
+          <div class="upgrade-card-title">Token Upgrade</div>
+          <div class="upgrade-description">Token and high score multipliers get higher each level.</div>
+          <div class="upgrade-progress-bar">
+            <div class="upgrade-progress-fill" id="token-upgrade-fill"></div>
+          </div>
+          <div class="upgrade-level-row">
+            <span>Level <strong id="token-upgrade-level">0</strong>/10</span>
+            <span id="token-upgrade-cost">Cost: 20</span>
+          </div>
+          <button id="token-upgrade-btn" type="button">Upgrade Tokens</button>
+          <div class="preview-status" id="token-upgrade-status"></div>
+        </div>
+        <div class="upgrade-card character-card">
+          <div class="upgrade-card-title">Cooldown Upgrade</div>
+          <div class="upgrade-description">Ability cooldown gets shorter each level.</div>
+          <div class="upgrade-progress-bar">
+            <div class="upgrade-progress-fill" id="cooldown-upgrade-fill"></div>
+          </div>
+          <div class="upgrade-level-row">
+            <span>Level <strong id="cooldown-upgrade-level">0</strong>/10</span>
+            <span id="cooldown-upgrade-cost">Cost: 20</span>
+          </div>
+          <button id="cooldown-upgrade-btn" type="button">Upgrade Cooldown</button>
+          <div class="preview-status" id="cooldown-upgrade-status"></div>
+        </div>
+        <div class="upgrades-note">Ability and passive upgrades are in Inventory and require ownership there.</div>
       </div>
     </div>
   </div>

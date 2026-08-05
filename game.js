@@ -6,6 +6,7 @@ const userNameEl = document.getElementById('user-name');
 const highScoreEl = document.getElementById('high-score');
 const tokensEl = document.getElementById('tokens');
 const signOutBtn = document.getElementById('sign-out');
+const playAgainBtn = document.getElementById('play-again-btn');
 const loginOverlay = document.getElementById('login-overlay');
 const loginTab = document.getElementById('login-tab');
 const signupTab = document.getElementById('signup-tab');
@@ -19,6 +20,7 @@ const loginStatus = document.getElementById('login-status');
 
 const W = canvas.width;
 const H = canvas.height;
+const PLAYER_BASE_SPEED = 220;
 let cols = 25;
 let rows = 20;
 const cellSize = 40;
@@ -28,7 +30,7 @@ const player = {
   x: cellSize / 2,
   y: cellSize / 2,
   r: 14,
-  speed: 220,
+  speed: PLAYER_BASE_SPEED,
   vx: 0,
   vy: 0,
   color: '#66e'
@@ -63,7 +65,9 @@ const finishCell = { x: cols - 1, y: rows - 1 };
 let gameState = 'start';
 let highScore = 0;
 let currentUser = null;
-let users = {};
+let authToken = null;
+let currentUserData = null;
+const API_BASE_URL = window.location.protocol === 'file:' ? 'http://localhost:8000' : '';
 
 let enemyCount = 10;
 let currentMode = 'Medium';
@@ -97,28 +101,64 @@ let sessionStunKey = 'e';
 let sessionBoostKey = 'Space';
 
 function isEquipped(name){
-  if(currentUser) return Array.isArray(users[currentUser].equipped) && users[currentUser].equipped.includes(name);
+  if(currentUserData) return Array.isArray(currentUserData.equipped) && currentUserData.equipped.includes(name);
   return sessionEquipped.includes(name);
 }
 
 function hasEquipped(item){
-  if(currentUser) return Array.isArray(users[currentUser].equipped) && users[currentUser].equipped.includes(item);
+  if(currentUserData) return Array.isArray(currentUserData.equipped) && currentUserData.equipped.includes(item);
   return sessionEquipped.includes(item);
 }
 
+function getUserValue(key, defaultValue = null){
+  if(!currentUserData) return defaultValue;
+  return currentUserData[key] != null ? currentUserData[key] : defaultValue;
+}
 
 function rand(min, max){ return Math.random() * (max - min) + min; }
 function cellKey(cell){ return `${cell.x},${cell.y}`; }
 function getCellAt(x, y){ return x >= 0 && x < cols && y >= 0 && y < rows ? maze[y][x] : null; }
 function getCellCenter(x, y){ return { x: x * cellSize + cellSize / 2, y: y * cellSize + cellSize / 2 }; }
 
-function loadUsers(){
-  try {
-    const raw = localStorage.getItem('orbMazeUsers');
-    users = raw ? JSON.parse(raw) : {};
-  } catch(e){
-    users = {};
+async function apiRequest(path, method = 'GET', body = null){
+  const init = {
+    method,
+    headers: {
+      'Content-Type': 'application/json'
+    }
+  };
+  if(authToken){
+    init.headers.Authorization = `Bearer ${authToken}`;
   }
+  if(body){
+    init.body = JSON.stringify(body);
+  }
+  return fetch(`${API_BASE_URL}${path}`, init);
+}
+
+async function syncUserState(){
+  if(!currentUser || !authToken || !currentUserData) return;
+  try {
+    const response = await apiRequest('/api/user', 'POST', currentUserData);
+    if(!response.ok){
+      console.warn('Could not sync user state:', response.status);
+      return;
+    }
+    const data = await response.json();
+    if(data.user){
+      currentUserData = data.user;
+    }
+  } catch (error) {
+    console.warn('Failed to sync user state:', error);
+  }
+}
+
+function hideAllOverlays(){
+  if(homeOverlay) homeOverlay.style.display = 'none';
+  if(shopOverlay) shopOverlay.style.display = 'none';
+  if(settingsOverlay) settingsOverlay.style.display = 'none';
+  if(inventoryPanel) inventoryPanel.style.display = 'none';
+  if(homePlayPanel) homePlayPanel.style.display = 'none';
 }
 
 function showHomeMenu(){
@@ -140,42 +180,29 @@ function showShopOverlay(){
   updateShopUI();
 }
 
-function saveUsers(){
-  localStorage.setItem('orbMazeUsers', JSON.stringify(users));
-}
-
-function setCurrentUser(username){
+function setCurrentUser(username, data, token){
   currentUser = username;
-  if(!users[username]){
-    users[username] = {
-      password: '',
-      highScore: 0,
-      tokens: 0,
-      ownedBoost: false,
-      ownedPassive: false,
-      equipped: [],
-      stunKey: 'e',
-      boostKey: 'Space',
-      colors: { ...sessionColors }
-    };
-  }
-  highScore = users[username].highScore || 0;
-  tokens = users[username].tokens || 0;
-  stunKey = users[username].stunKey || 'e';
-  boostKey = users[username].boostKey || 'Space';
-  const userColors = users[username].colors || {};
+  currentUserData = data || {};
+  authToken = token || authToken;
+  highScore = currentUserData.highScore || 0;
+  tokens = currentUserData.tokens || 0;
+  stunKey = currentUserData.stunKey || 'e';
+  boostKey = currentUserData.boostKey || 'Space';
+  const userColors = currentUserData.colors || {};
   playerColor = userColors.player || sessionColors.player;
   enemyColor = userColors.enemy || sessionColors.enemy;
   wallColor = userColors.wall || sessionColors.wall;
   orbColor = userColors.orb || sessionColors.orb;
   finishColor = userColors.finish || sessionColors.finish;
+  ensureUserUpgrades(currentUserData);
   player.color = playerColor;
   orbs.forEach(o => { o.color = orbColor; });
   enemies.forEach(e => { e.color = enemyColor; });
   userNameEl.textContent = username;
   highScoreEl.textContent = highScore;
-  localStorage.setItem('orbMazeLastUser', username);
-  // show home overlay if present
+  if(authToken){
+    localStorage.setItem('orbMazeAuthToken', authToken);
+  }
   if(homeOverlay){
     homeOverlay.style.display = 'flex';
     if(homeTokensEl) homeTokensEl.textContent = tokens;
@@ -189,19 +216,31 @@ function updateUserUI(){
   tokensEl.textContent = tokens;
 }
 
-function initLogin(){
-  loadUsers();
-  activateLoginTab();
-  const lastUser = localStorage.getItem('orbMazeLastUser');
-  if(lastUser && users[lastUser]){
-    setCurrentUser(lastUser);
+async function restoreSession(){
+  const savedToken = localStorage.getItem('orbMazeAuthToken');
+  if(!savedToken) return false;
+  authToken = savedToken;
+  try {
+    const response = await apiRequest('/api/me');
+    if(!response.ok){
+      localStorage.removeItem('orbMazeAuthToken');
+      return false;
+    }
+    const data = await response.json();
+    setCurrentUser(data.username, data.user, authToken);
     loginOverlay.style.display = 'none';
-    gameState = 'start';
-    if(homeOverlay) homeOverlay.style.display = 'flex';
-  } else {
-    loginOverlay.style.display = 'flex';
-    gameState = 'start';
+    return true;
+  } catch (error) {
+    localStorage.removeItem('orbMazeAuthToken');
+    return false;
   }
+}
+
+function initLogin(){
+  activateLoginTab();
+  loginOverlay.style.display = 'flex';
+  if(homeOverlay) homeOverlay.style.display = 'none';
+  gameState = 'start';
 }
 
 function showStatus(message, error = false){
@@ -233,46 +272,58 @@ function activateSignupTab(){
   showStatus('');
 }
 
-function handleLogin(){
+async function handleLogin(){
   const username = loginUserInput.value.trim();
   const password = loginPassInput.value;
   if(!username || !password){
     showStatus('Enter username and password.', true);
     return;
   }
-  if(!users[username] || users[username].password !== password){
-    showStatus('Invalid username or password.', true);
-    return;
+  try {
+    const response = await apiRequest('/api/login', 'POST', { username, password });
+    if(!response.ok){
+      const data = await response.json().catch(() => ({}));
+      showStatus(data.message || 'Invalid username or password.', true);
+      return;
+    }
+    const data = await response.json();
+    setCurrentUser(data.username, data.user, data.token);
+    loginOverlay.style.display = 'none';
+    loginUserInput.value = '';
+    loginPassInput.value = '';
+    showStatus('Logged in successfully.');
+    gameState = 'start';
+    updateUserUI();
+  } catch (error) {
+    showStatus('Cannot reach server. Start backend: python3 server.py', true);
   }
-  setCurrentUser(username);
-  loginOverlay.style.display = 'none';
-  loginUserInput.value = '';
-  loginPassInput.value = '';
-  showStatus('Logged in successfully.');
-  gameState = 'start';
-  updateUserUI();
 }
 
-function handleSignup(){
+async function handleSignup(){
   const username = signupUserInput.value.trim();
   const password = signupPassInput.value;
   if(!username || !password){
     showStatus('Enter username and password.', true);
     return;
   }
-  if(users[username]){
-    showStatus('Username already exists.', true);
-    return;
+  try {
+    const response = await apiRequest('/api/signup', 'POST', { username, password });
+    if(!response.ok){
+      const data = await response.json().catch(() => ({}));
+      showStatus(data.message || 'Could not create account.', true);
+      return;
+    }
+    const data = await response.json();
+    setCurrentUser(data.username, data.user, data.token);
+    loginOverlay.style.display = 'none';
+    signupUserInput.value = '';
+    signupPassInput.value = '';
+    showStatus('Account created; logged in.');
+    gameState = 'start';
+    updateUserUI();
+  } catch (error) {
+    showStatus('Cannot reach server. Start backend: python3 server.py', true);
   }
-    users[username] = { password, highScore: 0, tokens: 0, ownedBoost: false, ownedPassive: false, equipped: [], stunKey: 'e', boostKey: 'Space', colors: { ...sessionColors } };
-  saveUsers();
-  setCurrentUser(username);
-  loginOverlay.style.display = 'none';
-  signupUserInput.value = '';
-  signupPassInput.value = '';
-  showStatus('Account created; logged in.');
-  gameState = 'start';
-  updateUserUI();
 }
 
 function initMaze(){
@@ -372,7 +423,8 @@ function spawnEnemies(){
     const idx = Math.floor(rand(0, spots.length));
     const spot = spots.splice(idx, 1)[0];
     const center = getCellCenter(spot.x, spot.y);
-    const baseSpeed = player.speed * (cfg.speedFactor || 0.8);
+    // Enemy speed is anchored to starter movement speed, not player upgrades.
+    const baseSpeed = PLAYER_BASE_SPEED * (cfg.speedFactor || 0.8);
     const speed = baseSpeed * (0.9 + Math.random() * 0.2);
     enemies.push({
       x: center.x,
@@ -571,21 +623,33 @@ function findPath(startCell, targetCell){
 function teleportNearExit(){
   const finish = getCellAt(finishCell.x, finishCell.y);
   if(!finish) return;
-  const neighbors = [
-    {dx: -1, dy: 0, wallIndex: 1, oppIndex: 3},
-    {dx: 1, dy: 0, wallIndex: 3, oppIndex: 1},
-    {dx: 0, dy: -1, wallIndex: 2, oppIndex: 0},
-    {dx: 0, dy: 1, wallIndex: 0, oppIndex: 2}
-  ];
+  const playerCell = getCellAt(Math.floor(player.x / cellSize), Math.floor(player.y / cellSize));
+  const level = getTeleportLevel();
   let target = null;
-  for(const neighbor of neighbors){
-    const cell = getCellAt(finish.x + neighbor.dx, finish.y + neighbor.dy);
-    if(!cell) continue;
-    if(!cell.walls[neighbor.wallIndex] && !finish.walls[neighbor.oppIndex]){
-      target = cell;
-      break;
+  const path = findPath(playerCell, finish);
+  if(path && path.length > 1){
+    const stepsBack = Math.max(1, 4 - level);
+    const index = Math.max(0, path.length - stepsBack - 1);
+    target = path[index];
+  }
+
+  if(!target){
+    const neighbors = [
+      {dx: -1, dy: 0, wallIndex: 1, oppIndex: 3},
+      {dx: 1, dy: 0, wallIndex: 3, oppIndex: 1},
+      {dx: 0, dy: -1, wallIndex: 2, oppIndex: 0},
+      {dx: 0, dy: 1, wallIndex: 0, oppIndex: 2}
+    ];
+    for(const neighbor of neighbors){
+      const cell = getCellAt(finish.x + neighbor.dx, finish.y + neighbor.dy);
+      if(!cell) continue;
+      if(!cell.walls[neighbor.wallIndex] && !finish.walls[neighbor.oppIndex]){
+        target = cell;
+        break;
+      }
     }
   }
+
   if(!target){
     const fallback = getCellAt(finish.x - 1, finish.y) || getCellAt(finish.x, finish.y - 1) || getCellAt(finish.x + 1, finish.y) || getCellAt(finish.x, finish.y + 1);
     if(fallback) target = fallback;
@@ -625,8 +689,10 @@ window.addEventListener('keydown', e => {
       } else {
         stunKey = normKey;
         if(stunKeyDisplay) stunKeyDisplay.textContent = (stunKey === 'Space' ? 'Space' : stunKey.toUpperCase());
-        if(currentUser){ users[currentUser].stunKey = stunKey; saveUsers(); }
-        else { sessionStunKey = stunKey; }
+        if(currentUserData){
+          currentUserData.stunKey = stunKey;
+          syncUserState();
+        } else { sessionStunKey = stunKey; }
         if(inventoryStatus) inventoryStatus.textContent = '';
         capturingKey = null;
       }
@@ -636,8 +702,10 @@ window.addEventListener('keydown', e => {
       } else {
         boostKey = normKey;
         if(boostKeyDisplay) boostKeyDisplay.textContent = (boostKey === 'Space' ? 'Space' : boostKey.toUpperCase());
-        if(currentUser){ users[currentUser].boostKey = boostKey; saveUsers(); }
-        else { sessionBoostKey = boostKey; }
+        if(currentUserData){
+          currentUserData.boostKey = boostKey;
+          syncUserState();
+        } else { sessionBoostKey = boostKey; }
         if(inventoryStatus) inventoryStatus.textContent = '';
         capturingKey = null;
       }
@@ -651,7 +719,7 @@ window.addEventListener('keydown', e => {
     returnToHomeMenu();
   }
   if(gameState === 'playing' && normKey === stunKey && stunCooldown <= 0){
-    stunCooldown = stunCooldownMax;
+    stunCooldown = stunCooldownMax * getCooldownFactor();
     enemies.forEach(enemy => {
       enemy.stunned = true;
       enemy.stunTimer = stunDuration;
@@ -664,8 +732,8 @@ window.addEventListener('keydown', e => {
   // Boost on assigned key if equipped
   if(gameState === 'playing' && isEquipped('boost') && normKey === boostKey && boostCooldown <= 0 && !boostActive){
     boostActive = true;
-    boostTimer = boostDuration;
-    boostCooldown = boostCooldownMax;
+    boostTimer = getBoostDuration();
+    boostCooldown = boostCooldownMax * getCooldownFactor();
   }
 });
 window.addEventListener('keyup', e => { keys[e.key] = false; });
@@ -697,6 +765,11 @@ const inventoryItemPassiveBtn = document.getElementById('inventory-item-passive'
 const inventoryItemTeleportBtn = document.getElementById('inventory-item-teleport');
 const inventoryItemFastFeetBtn = document.getElementById('inventory-item-fastFeet');
 const inventoryPreviewDetails = document.getElementById('inventory-preview-details');
+const inventoryUpgradeCard = document.getElementById('inventory-upgrade-card');
+const inventoryUpgradeLevelEl = document.getElementById('inventory-upgrade-level');
+const inventoryUpgradeCostEl = document.getElementById('inventory-upgrade-cost');
+const inventoryUpgradeBtn = document.getElementById('inventory-upgrade-btn');
+const inventoryUpgradeStatus = document.getElementById('inventory-upgrade-status');
 const homeStatus = document.getElementById('home-status');
 const homeBackMainBtn = document.getElementById('home-back-main');
 const shopBackMainBtn = document.getElementById('shop-back-main');
@@ -712,6 +785,25 @@ const shopPreviewStatus = document.getElementById('shop-preview-status');
 const shopBuyBtn = document.getElementById('shop-buy-btn');
 const shopCloseBtn = document.getElementById('shop-close-btn');
 const homeSettingsBtn = document.getElementById('home-settings');
+const homeUpgradesBtn = document.getElementById('home-upgrades');
+const upgradesOverlay = document.getElementById('upgrades-overlay');
+const upgradesCloseBtn = document.getElementById('upgrades-close-btn');
+const upgradesTokensEl = document.getElementById('upgrades-tokens');
+const speedUpgradeBtn = document.getElementById('speed-upgrade-btn');
+const speedUpgradeLevelEl = document.getElementById('speed-upgrade-level');
+const speedUpgradeCostEl = document.getElementById('speed-upgrade-cost');
+const speedUpgradeFill = document.getElementById('speed-upgrade-fill');
+const speedUpgradeStatus = document.getElementById('speed-upgrade-status');
+const tokenUpgradeBtn = document.getElementById('token-upgrade-btn');
+const tokenUpgradeLevelEl = document.getElementById('token-upgrade-level');
+const tokenUpgradeCostEl = document.getElementById('token-upgrade-cost');
+const tokenUpgradeFill = document.getElementById('token-upgrade-fill');
+const tokenUpgradeStatus = document.getElementById('token-upgrade-status');
+const cooldownUpgradeBtn = document.getElementById('cooldown-upgrade-btn');
+const cooldownUpgradeLevelEl = document.getElementById('cooldown-upgrade-level');
+const cooldownUpgradeCostEl = document.getElementById('cooldown-upgrade-cost');
+const cooldownUpgradeFill = document.getElementById('cooldown-upgrade-fill');
+const cooldownUpgradeStatus = document.getElementById('cooldown-upgrade-status');
 const settingsOverlay = document.getElementById('settings-overlay');
 const settingsCloseBtn = document.getElementById('settings-close-btn');
 const settingsSaveBtn = document.getElementById('settings-save');
@@ -734,6 +826,13 @@ signupFormElement.addEventListener('submit', e => {
 signOutBtn.addEventListener('click', () => {
   signOut();
 });
+if(playAgainBtn){
+  playAgainBtn.addEventListener('click', () => {
+    if(gameState === 'won'){
+      startGame();
+    }
+  });
+}
 const modeSelect = document.getElementById('mode-select');
 if(modeSelect){
   modeSelect.value = currentMode;
@@ -752,6 +851,18 @@ if(homePlayBtn){
 }
 if(homeOpenShopBtn){
   homeOpenShopBtn.addEventListener('click', () => { showShopOverlay(); });
+}
+if(homeUpgradesBtn){
+  homeUpgradesBtn.addEventListener('click', () => {
+    if(upgradesOverlay) upgradesOverlay.style.display = 'flex';
+    if(homeOverlay) homeOverlay.style.display = 'none';
+    if(shopOverlay) shopOverlay.style.display = 'none';
+    if(settingsOverlay) settingsOverlay.style.display = 'none';
+    if(inventoryPanel) inventoryPanel.style.display = 'none';
+    if(homePlayPanel) homePlayPanel.style.display = 'none';
+    if(upgradesTokensEl) upgradesTokensEl.textContent = tokens;
+    refreshUpgradeUI();
+  });
 }
 if(homeInventoryBtn){
   homeInventoryBtn.addEventListener('click', () => {
@@ -777,6 +888,21 @@ if(settingsCloseBtn){
     if(settingsOverlay) settingsOverlay.style.display = 'none';
     showHomeMenu();
   });
+}
+if(upgradesCloseBtn){
+  upgradesCloseBtn.addEventListener('click', () => {
+    if(upgradesOverlay) upgradesOverlay.style.display = 'none';
+    showHomeMenu();
+  });
+}
+if(speedUpgradeBtn){
+  speedUpgradeBtn.addEventListener('click', () => applyUpgrade('speed'));
+}
+if(tokenUpgradeBtn){
+  tokenUpgradeBtn.addEventListener('click', () => applyUpgrade('token'));
+}
+if(cooldownUpgradeBtn){
+  cooldownUpgradeBtn.addEventListener('click', () => applyUpgrade('cooldown'));
 }
 if(settingsBackMainBtn){
   settingsBackMainBtn.addEventListener('click', () => {
@@ -811,20 +937,22 @@ if(inventorySaveBtn){
     const passives = wants.filter(item => itemTypes[item] === 'passive');
     if(abilities.length > 1){ if(inventoryStatus) inventoryStatus.textContent = 'Only one ability can be equipped.'; return; }
     if(passives.length > 1){ if(inventoryStatus) inventoryStatus.textContent = 'Only one passive can be equipped.'; return; }
-    if(wants.includes('boost') && !(currentUser ? users[currentUser].ownedBoost : false)){
+    if(wants.includes('boost') && !getUserValue('ownedBoost', false)){
       if(inventoryStatus) inventoryStatus.textContent = 'You do not own Speed Boost.'; return;
     }
-    if(wants.includes('teleport') && !(currentUser ? users[currentUser].ownedTeleport : false)){
+    if(wants.includes('teleport') && !getUserValue('ownedTeleport', false)){
       if(inventoryStatus) inventoryStatus.textContent = 'You do not own Teleport.'; return;
     }
-    if(wants.includes('fastFeet') && !(currentUser ? users[currentUser].ownedFastFeet : false)){
+    if(wants.includes('fastFeet') && !getUserValue('ownedFastFeet', false)){
       if(inventoryStatus) inventoryStatus.textContent = 'You do not own Fast Feet.'; return;
     }
-    if(wants.includes('passive') && !(currentUser ? users[currentUser].ownedPassive : false)){
+    if(wants.includes('passive') && !getUserValue('ownedPassive', false)){
       if(inventoryStatus) inventoryStatus.textContent = 'You do not own No Blindness passive.'; return;
     }
-    if(currentUser){ users[currentUser].equipped = wants; saveUsers(); }
-    else { sessionEquipped = wants; }
+    if(currentUserData){
+      currentUserData.equipped = wants;
+      syncUserState();
+    } else { sessionEquipped = wants; }
     if(inventoryStatus) inventoryStatus.textContent = 'Inventory saved.';
   });
 }
@@ -839,6 +967,24 @@ if(inventoryBackMainBtn){
     if(inventoryPanel) inventoryPanel.style.display = 'none';
     if(homePlayPanel) homePlayPanel.style.display = 'none';
     showHomeMenu();
+  });
+}
+if(inventoryItemBoostBtn){
+  inventoryItemBoostBtn.addEventListener('click', () => selectInventoryItem('boost'));
+}
+if(inventoryItemTeleportBtn){
+  inventoryItemTeleportBtn.addEventListener('click', () => selectInventoryItem('teleport'));
+}
+if(inventoryItemFastFeetBtn){
+  inventoryItemFastFeetBtn.addEventListener('click', () => selectInventoryItem('fastFeet'));
+}
+if(inventoryItemPassiveBtn){
+  inventoryItemPassiveBtn.addEventListener('click', () => selectInventoryItem('passive'));
+}
+if(inventoryUpgradeBtn){
+  inventoryUpgradeBtn.addEventListener('click', async () => {
+    if(!activeInventoryItem) return;
+    await applyUpgrade(activeInventoryItem);
   });
 }
 if(shopBackMainBtn){
@@ -913,15 +1059,214 @@ const shopItems = {
 
 let selectedShopItem = 'boost';
 let selectedInventoryItems = new Set();
+let activeInventoryItem = null;
 const itemTypes = { boost: 'ability', teleport: 'ability', fastFeet: 'passive', passive: 'passive' };
+
+const upgradeConfig = {
+  speed: { maxLevel: 10, baseCost: 20, costFactor: 1.5 },
+  token: { maxLevel: 10, baseCost: 20, costFactor: 1.5 },
+  cooldown: { maxLevel: 10, baseCost: 20, costFactor: 1.5 },
+  boost: { maxLevel: 3, baseCost: 40, costFactor: 2.2 },
+  teleport: { maxLevel: 3, baseCost: 40, costFactor: 2.2 },
+  fastFeet: { maxLevel: 3, baseCost: 40, costFactor: 2.2 },
+  passive: { maxLevel: 3, baseCost: 40, costFactor: 2.2 }
+};
 
 function formatCurrency(amount){
   return `${amount} Tokens`;
 }
 
+function getUpgradeCost(type, level){
+  const cfg = upgradeConfig[type];
+  if(!cfg) return 0;
+  return Math.max(1, Math.ceil(cfg.baseCost * Math.pow(cfg.costFactor, level)));
+}
+
+function ensureUserUpgrades(user){
+  const legacyCharacterLevel = user.characterLevel || 0;
+  if(user.speedLevel == null) user.speedLevel = legacyCharacterLevel;
+  if(user.tokenLevel == null) user.tokenLevel = legacyCharacterLevel;
+  if(user.cooldownLevel == null) user.cooldownLevel = legacyCharacterLevel;
+  if(user.boostLevel == null) user.boostLevel = 0;
+  if(user.teleportLevel == null) user.teleportLevel = 0;
+  if(user.fastFeetLevel == null) user.fastFeetLevel = 0;
+  if(user.passiveLevel == null) user.passiveLevel = 0;
+}
+
+function getSpeedLevel(){ return getUserValue('speedLevel', 0); }
+function getTokenLevel(){ return getUserValue('tokenLevel', 0); }
+function getCooldownLevel(){ return getUserValue('cooldownLevel', 0); }
+function getBoostLevel(){ return getUserValue('boostLevel', 0); }
+function getTeleportLevel(){ return getUserValue('teleportLevel', 0); }
+function getFastFeetLevel(){ return getUserValue('fastFeetLevel', 0); }
+function getPassiveLevel(){ return getUserValue('passiveLevel', 0); }
+
+function getCharacterSpeedMultiplier(){
+  return 1 + getSpeedLevel() * 0.03;
+}
+
+function getTokenMultiplier(){
+  return 1 + getTokenLevel() * 0.05;
+}
+
+function getCooldownFactor(){
+  return Math.max(0.55, 1 - getCooldownLevel() * 0.04);
+}
+
+function getBoostPower(){
+  return 1 + getBoostLevel() * 0.25;
+}
+
+function getBoostDuration(){
+  return boostDuration * (1 + getBoostLevel() * 0.2);
+}
+
+function getFastFeetMultiplier(){
+  return 1.5 + getFastFeetLevel() * 0.12;
+}
+
+function getPassiveEffect(){
+  return 1 + getPassiveLevel();
+}
+
+function getRunScoreValue(){
+  return Math.max(1, Math.round(score * getTokenMultiplier()));
+}
+
+function getUpgradeLevel(type){
+  if(type === 'speed') return getSpeedLevel();
+  if(type === 'token') return getTokenLevel();
+  if(type === 'cooldown') return getCooldownLevel();
+  if(type === 'boost') return getBoostLevel();
+  if(type === 'teleport') return getTeleportLevel();
+  if(type === 'fastFeet') return getFastFeetLevel();
+  if(type === 'passive') return getPassiveLevel();
+  return 0;
+}
+
+function getUpgradeLevelKey(type){
+  if(type === 'speed') return 'speedLevel';
+  if(type === 'token') return 'tokenLevel';
+  if(type === 'cooldown') return 'cooldownLevel';
+  return `${type}Level`;
+}
+
+function getUpgradeDisplayName(type){
+  if(type === 'speed') return 'Speed';
+  if(type === 'token') return 'Token';
+  if(type === 'cooldown') return 'Cooldown';
+  return shopItems[type]?.name || 'Item';
+}
+
+function refreshUpgradeUI(){
+  if(upgradesTokensEl) upgradesTokensEl.textContent = tokens;
+
+  const setUpgradeRow = (type, levelEl, costEl, btnEl, fillEl) => {
+    if(!levelEl || !costEl || !btnEl) return;
+    const level = getUpgradeLevel(type);
+    const maxLevel = upgradeConfig[type].maxLevel;
+    const atMax = level >= maxLevel;
+    const cost = getUpgradeCost(type, level);
+    levelEl.textContent = String(level);
+    if(fillEl){
+      fillEl.style.width = `${Math.min(100, (level / maxLevel) * 100)}%`;
+    }
+    if(atMax){
+      costEl.textContent = 'MAX';
+      btnEl.textContent = 'Maxed';
+      btnEl.disabled = true;
+      return;
+    }
+    costEl.textContent = `Cost: ${cost}`;
+    btnEl.textContent = `Upgrade ${getUpgradeDisplayName(type)}`;
+    btnEl.disabled = tokens < cost;
+  };
+
+  setUpgradeRow('speed', speedUpgradeLevelEl, speedUpgradeCostEl, speedUpgradeBtn, speedUpgradeFill);
+  setUpgradeRow('token', tokenUpgradeLevelEl, tokenUpgradeCostEl, tokenUpgradeBtn, tokenUpgradeFill);
+  setUpgradeRow('cooldown', cooldownUpgradeLevelEl, cooldownUpgradeCostEl, cooldownUpgradeBtn, cooldownUpgradeFill);
+}
+
+function refreshInventoryUpgradePanel(item){
+  if(!inventoryUpgradeCard || !inventoryUpgradeLevelEl || !inventoryUpgradeCostEl || !inventoryUpgradeBtn) return;
+  if(!item || !shopItems[item] || !getOwned(item)){
+    inventoryUpgradeCard.style.display = 'none';
+    return;
+  }
+
+  inventoryUpgradeCard.style.display = 'block';
+  const level = getUpgradeLevel(item);
+  const maxLevel = upgradeConfig[item].maxLevel;
+  const atMax = level >= maxLevel;
+  const cost = getUpgradeCost(item, level);
+
+  inventoryUpgradeLevelEl.textContent = `Level ${level}/${maxLevel}`;
+  inventoryUpgradeCostEl.textContent = atMax ? 'Cost: MAX' : `Cost: ${cost} Tokens`;
+  inventoryUpgradeBtn.textContent = atMax ? 'Maxed' : `Upgrade ${shopItems[item].name}`;
+  inventoryUpgradeBtn.disabled = atMax || tokens < cost;
+}
+
+async function applyUpgrade(type){
+  if(!currentUserData) return;
+  if(!upgradeConfig[type]) return;
+
+  const isCoreUpgrade = type === 'speed' || type === 'token' || type === 'cooldown';
+
+  if(!isCoreUpgrade){
+    if(!getOwned(type)){
+      if(inventoryUpgradeStatus) inventoryUpgradeStatus.textContent = 'You need to own this item before upgrading.';
+      return;
+    }
+    if(!activeInventoryItem || activeInventoryItem !== type){
+      if(inventoryUpgradeStatus) inventoryUpgradeStatus.textContent = 'Select this item in inventory first.';
+      return;
+    }
+  }
+
+  const levelKey = getUpgradeLevelKey(type);
+  const level = currentUserData[levelKey] || 0;
+  const maxLevel = upgradeConfig[type].maxLevel;
+  if(level >= maxLevel){
+    if(!isCoreUpgrade && inventoryUpgradeStatus) inventoryUpgradeStatus.textContent = 'Already max level.';
+    if(type === 'speed' && speedUpgradeStatus) speedUpgradeStatus.textContent = 'Already max level.';
+    if(type === 'token' && tokenUpgradeStatus) tokenUpgradeStatus.textContent = 'Already max level.';
+    if(type === 'cooldown' && cooldownUpgradeStatus) cooldownUpgradeStatus.textContent = 'Already max level.';
+    refreshInventoryUpgradePanel(activeInventoryItem);
+    refreshUpgradeUI();
+    return;
+  }
+
+  const cost = getUpgradeCost(type, level);
+  if(tokens < cost){
+    if(!isCoreUpgrade && inventoryUpgradeStatus) inventoryUpgradeStatus.textContent = `Need ${cost - tokens} more tokens.`;
+    if(type === 'speed' && speedUpgradeStatus) speedUpgradeStatus.textContent = `Need ${cost - tokens} more tokens.`;
+    if(type === 'token' && tokenUpgradeStatus) tokenUpgradeStatus.textContent = `Need ${cost - tokens} more tokens.`;
+    if(type === 'cooldown' && cooldownUpgradeStatus) cooldownUpgradeStatus.textContent = `Need ${cost - tokens} more tokens.`;
+    refreshInventoryUpgradePanel(activeInventoryItem);
+    refreshUpgradeUI();
+    return;
+  }
+
+  tokens -= cost;
+  currentUserData.tokens = tokens;
+  currentUserData[levelKey] = level + 1;
+  await syncUserState();
+
+  updateUserUI();
+  if(homeTokensEl) homeTokensEl.textContent = tokens;
+  if(shopTokensEl) shopTokensEl.textContent = tokens;
+  if(upgradesTokensEl) upgradesTokensEl.textContent = tokens;
+  if(!isCoreUpgrade && inventoryUpgradeStatus) inventoryUpgradeStatus.textContent = `${getUpgradeDisplayName(type)} upgraded to level ${currentUserData[levelKey]}.`;
+  if(type === 'speed' && speedUpgradeStatus) speedUpgradeStatus.textContent = `Speed upgraded to level ${currentUserData[levelKey]}.`;
+  if(type === 'token' && tokenUpgradeStatus) tokenUpgradeStatus.textContent = `Token multiplier upgraded to level ${currentUserData[levelKey]}.`;
+  if(type === 'cooldown' && cooldownUpgradeStatus) cooldownUpgradeStatus.textContent = `Cooldown upgraded to level ${currentUserData[levelKey]}.`;
+  refreshInventoryUpgradePanel(activeInventoryItem);
+  refreshUpgradeUI();
+}
+
 function getOwned(item){
-  if(!currentUser) return false;
-  return !!users[currentUser][shopItems[item].ownedKey];
+  if(!currentUserData) return false;
+  return !!getUserValue(shopItems[item].ownedKey, false);
 }
 
 function selectShopItem(item){
@@ -936,7 +1281,7 @@ function selectShopItem(item){
     shopPreviewStatus.style.color = owned ? '#7af97a' : '#fff';
   }
   if(shopBuyBtn){
-    shopBuyBtn.disabled = owned || tokens < config.cost || !currentUser;
+    shopBuyBtn.disabled = owned || tokens < config.cost || !currentUserData;
     shopBuyBtn.textContent = owned ? 'Owned' : `Buy (${config.cost})`;
   }
   if(shopItemBoostBtn) shopItemBoostBtn.classList.toggle('selected', item === 'boost');
@@ -966,9 +1311,13 @@ function selectInventoryItem(item){
     selectedInventoryItems.add(item);
   }
 
+  activeInventoryItem = item;
+
   if(inventoryPreviewDetails){
-    inventoryPreviewDetails.innerHTML = `<strong>${config.name}</strong><br>${config.description}<br><br>${selectedInventoryItems.has(item) ? 'Selected' : 'Deselected'}`;
+    inventoryPreviewDetails.innerHTML = `<strong>${config.name}</strong><br>${config.description}<br><br>${selectedInventoryItems.has(item) ? 'Equipped in inventory' : 'Not equipped'}`;
   }
+  if(inventoryUpgradeStatus) inventoryUpgradeStatus.textContent = '';
+  refreshInventoryUpgradePanel(item);
   if(inventoryItemBoostBtn) inventoryItemBoostBtn.classList.toggle('selected', selectedInventoryItems.has('boost'));
   if(inventoryItemTeleportBtn) inventoryItemTeleportBtn.classList.toggle('selected', selectedInventoryItems.has('teleport'));
   if(inventoryItemFastFeetBtn) inventoryItemFastFeetBtn.classList.toggle('selected', selectedInventoryItems.has('fastFeet'));
@@ -976,16 +1325,16 @@ function selectInventoryItem(item){
 }
 
 function updateInventoryUI(){
-  const ownedBoost = currentUser ? !!users[currentUser].ownedBoost : false;
-  const ownedTeleport = currentUser ? !!users[currentUser].ownedTeleport : false;
-  const ownedFastFeet = currentUser ? !!users[currentUser].ownedFastFeet : false;
-  const ownedPassive = currentUser ? !!users[currentUser].ownedPassive : false;
+  const ownedBoost = !!getUserValue('ownedBoost', false);
+  const ownedTeleport = !!getUserValue('ownedTeleport', false);
+  const ownedFastFeet = !!getUserValue('ownedFastFeet', false);
+  const ownedPassive = !!getUserValue('ownedPassive', false);
   if(inventoryItemBoostBtn) inventoryItemBoostBtn.style.display = ownedBoost ? 'flex' : 'none';
   if(inventoryItemTeleportBtn) inventoryItemTeleportBtn.style.display = ownedTeleport ? 'flex' : 'none';
   if(inventoryItemFastFeetBtn) inventoryItemFastFeetBtn.style.display = ownedFastFeet ? 'flex' : 'none';
   if(inventoryItemPassiveBtn) inventoryItemPassiveBtn.style.display = ownedPassive ? 'flex' : 'none';
 
-  const currentEquipped = currentUser ? (users[currentUser].equipped || []) : sessionEquipped;
+  const currentEquipped = currentUserData ? (currentUserData.equipped || []) : sessionEquipped;
   selectedInventoryItems = new Set(currentEquipped.filter(item =>
     (item === 'boost' && ownedBoost) ||
     (item === 'teleport' && ownedTeleport) ||
@@ -995,9 +1344,11 @@ function updateInventoryUI(){
 
   if(!ownedBoost && !ownedPassive && !ownedTeleport && !ownedFastFeet){
     selectedInventoryItems.clear();
+    activeInventoryItem = null;
     if(inventoryPreviewDetails){
       inventoryPreviewDetails.innerHTML = '<strong>No owned items</strong><br>Purchase abilities in the shop to equip them.';
     }
+    if(inventoryUpgradeCard) inventoryUpgradeCard.style.display = 'none';
     if(inventoryItemBoostBtn) inventoryItemBoostBtn.classList.remove('selected');
     if(inventoryItemTeleportBtn) inventoryItemTeleportBtn.classList.remove('selected');
     if(inventoryItemFastFeetBtn) inventoryItemFastFeetBtn.classList.remove('selected');
@@ -1022,13 +1373,16 @@ function updateInventoryUI(){
   if(inventoryItemTeleportBtn) inventoryItemTeleportBtn.classList.toggle('selected', selectedInventoryItems.has('teleport'));
   if(inventoryItemFastFeetBtn) inventoryItemFastFeetBtn.classList.toggle('selected', selectedInventoryItems.has('fastFeet'));
   if(inventoryItemPassiveBtn) inventoryItemPassiveBtn.classList.toggle('selected', selectedInventoryItems.has('passive'));
+  const firstItem = Array.from(selectedInventoryItems)[0] || (ownedBoost ? 'boost' : ownedTeleport ? 'teleport' : ownedPassive ? 'passive' : ownedFastFeet ? 'fastFeet' : null);
+  activeInventoryItem = firstItem;
   if(inventoryPreviewDetails){
-    const firstItem = Array.from(selectedInventoryItems)[0];
     if(firstItem){
       const config = shopItems[firstItem];
       inventoryPreviewDetails.innerHTML = `<strong>${config.name}</strong><br>${config.description}`;
     }
   }
+  if(inventoryUpgradeStatus) inventoryUpgradeStatus.textContent = '';
+  refreshInventoryUpgradePanel(activeInventoryItem);
 }
 
 function updateShopUI(){
@@ -1053,15 +1407,15 @@ function applyColorSettings(){
   player.color = playerColor;
   orbs.forEach(o => { o.color = orbColor; });
   enemies.forEach(e => { e.color = enemyColor; });
-  if(currentUser){
-    users[currentUser].colors = {
+  if(currentUserData){
+    currentUserData.colors = {
       player: playerColor,
       enemy: enemyColor,
       wall: wallColor,
       orb: orbColor,
       finish: finishColor
     };
-    saveUsers();
+    syncUserState();
   }
 }
 
@@ -1089,8 +1443,8 @@ if(shopItemPassiveBtn){
   shopItemPassiveBtn.addEventListener('click', () => selectShopItem('passive'));
 }
 if(shopBuyBtn){
-  shopBuyBtn.addEventListener('click', () => {
-    if(!currentUser || !selectedShopItem) return;
+  shopBuyBtn.addEventListener('click', async () => {
+    if(!currentUserData || !selectedShopItem) return;
     const item = shopItems[selectedShopItem];
     const owned = getOwned(selectedShopItem);
     if(owned) return;
@@ -1099,8 +1453,9 @@ if(shopBuyBtn){
       return;
     }
     tokens -= item.cost;
-    users[currentUser][item.saveKey] = true;
-    saveUsers();
+    currentUserData[item.saveKey] = true;
+    currentUserData.tokens = tokens;
+    await syncUserState();
     if(tokensEl) tokensEl.textContent = tokens;
     if(shopTokensEl) shopTokensEl.textContent = tokens;
     updateShopUI();
@@ -1140,8 +1495,11 @@ function returnToHomeMenu(){
 
 function signOut(){
   currentUser = null;
-  localStorage.removeItem('orbMazeLastUser');
-  highScore = parseInt(localStorage.getItem('orbMazeHighScore')) || 0;
+  currentUserData = null;
+  authToken = null;
+  localStorage.removeItem('orbMazeAuthToken');
+  highScore = 0;
+  tokens = 0;
   updateUserUI();
   activateLoginTab();
   loginOverlay.style.display = 'flex';
@@ -1152,6 +1510,10 @@ function signOut(){
 }
 
 function update(dt){
+  if(playAgainBtn){
+    playAgainBtn.style.display = (gameState === 'won' && loginOverlay.style.display === 'none') ? 'inline-block' : 'none';
+  }
+
   if(stunCooldown > 0){
     stunCooldown = Math.max(0, stunCooldown - dt);
   }
@@ -1184,11 +1546,10 @@ function update(dt){
   if(gameState !== 'playing') return;
 
   // apply boost multiplier to player speed
-  player.speed = player.baseSpeed ? player.baseSpeed : player.speed;
-  if(!player.baseSpeed) player.baseSpeed = player.speed;
-  let speedMultiplier = boostActive ? 2 : 1;
+  player.baseSpeed = PLAYER_BASE_SPEED * getCharacterSpeedMultiplier();
+  let speedMultiplier = boostActive ? 2 * getBoostPower() : 1;
   if(hasEquipped('fastFeet')){
-    speedMultiplier *= 1.5;
+    speedMultiplier *= getFastFeetMultiplier();
   }
   player.speed = player.baseSpeed * speedMultiplier;
 
@@ -1234,24 +1595,21 @@ function update(dt){
   const playerCell = getCellAt(Math.floor(player.x / cellSize), Math.floor(player.y / cellSize));
   if(playerCell && playerCell.x === finishCell.x && playerCell.y === finishCell.y){
     gameState = 'won';
-    const earnedTokens = Math.max(1, score);
+    const earnedTokens = getRunScoreValue();
     tokens += earnedTokens;
-    if(currentUser){
-      users[currentUser].tokens = tokens;
-      saveUsers();
+    const runScoreValue = getRunScoreValue();
+    if(runScoreValue > highScore){
+      highScore = runScoreValue;
+      highScoreEl.textContent = highScore;
+    }
+    if(currentUserData){
+      currentUserData.tokens = tokens;
+      currentUserData.highScore = highScore;
+      syncUserState();
     }
     if(tokensEl) tokensEl.textContent = tokens;
     if(shopTokensEl) shopTokensEl.textContent = tokens;
     if(homeTokensEl) homeTokensEl.textContent = tokens;
-    if(score > highScore){
-      highScore = score;
-      if(currentUser){
-        users[currentUser].highScore = highScore;
-        saveUsers();
-      } else {
-        localStorage.setItem('orbMazeHighScore', highScore);
-      }
-    }
     return;
   }
 
@@ -1277,8 +1635,9 @@ function update(dt){
         const dy = target.y - enemy.y;
         const dist = Math.hypot(dx, dy);
         if(dist > 0.5){
-          enemy.x += (dx / dist) * enemy.speed * dt;
-          enemy.y += (dy / dist) * enemy.speed * dt;
+          const passiveFactor = hasEquipped('passive') ? Math.max(0.5, 1 - getPassiveEffect() * 0.05) : 1;
+          enemy.x += (dx / dist) * enemy.speed * passiveFactor * dt;
+          enemy.y += (dy / dist) * enemy.speed * passiveFactor * dt;
         } else {
           enemy.path.shift();
         }
@@ -1308,13 +1667,13 @@ function update(dt){
           invulnerable = true;
           invulnerabilityTimer = 1.5;
           if(lives <= 0){
-            if(score > highScore){
-              highScore = score;
-              if(currentUser){
-                users[currentUser].highScore = highScore;
-                saveUsers();
-              } else {
-                localStorage.setItem('orbMazeHighScore', highScore);
+            const runScoreValue = getRunScoreValue();
+            if(runScoreValue > highScore){
+              highScore = runScoreValue;
+              highScoreEl.textContent = highScore;
+              if(currentUserData){
+                currentUserData.highScore = highScore;
+                syncUserState();
               }
             }
             gameState = 'dead';
@@ -1458,9 +1817,9 @@ function draw(){
   if(gameState === 'start'){
     drawText('Maze Run', 'Press Enter to start and collect orbs before escaping');
   } else if(gameState === 'dead'){
-    drawText('Game Over', `Score: ${score} | High score: ${highScore} — Press Enter to try again or M for menu`);
+    drawText('Game Over', `Score: ${getRunScoreValue()} | High score: ${highScore} — Press Enter to try again or M for menu`);
   } else if(gameState === 'won'){
-    drawText(`You escaped! Score: ${score}`, `High score: ${highScore} — Press Enter to play again or M for menu`);
+    drawText(`You escaped! Score: ${getRunScoreValue()}`, `High score: ${highScore} — Press Enter to play again or M for menu`);
   }
 }
 
@@ -1473,8 +1832,9 @@ function loop(t){
   requestAnimationFrame(loop);
 }
 
-loadUsers();
-initLogin();
-applyMode(currentMode);
-resetGame();
-requestAnimationFrame(loop);
+restoreSession().finally(() => {
+  initLogin();
+  applyMode(currentMode);
+  resetGame();
+  requestAnimationFrame(loop);
+});

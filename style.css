@@ -158,6 +158,113 @@ canvas{
   background:rgba(0,0,0,0.85);
   z-index:56;
 }
+#upgrades-overlay{
+  position:fixed;
+  inset:0;
+  display:none;
+  align-items:center;
+  justify-content:center;
+  background:rgba(0,0,0,0.88);
+  z-index:57;
+}
+#upgrades-box{
+  width:360px;
+  max-width:95vw;
+  padding:12px;
+  background:#050507;
+  border:1px solid #2a2a2f;
+  border-radius:12px;
+  box-shadow:0 30px 90px rgba(0,0,0,0.75);
+  color:#fff;
+}
+.upgrades-header{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:12px;
+  margin-bottom:18px;
+}
+.upgrades-header h3{
+  margin:0;
+  font-size:24px;
+  letter-spacing:1px;
+}
+.upgrades-grid{
+  display:grid;
+  grid-template-columns:1fr;
+  gap:8px;
+}
+.upgrade-card{
+  padding:9px;
+  background:#0e1120;
+  border:1px solid #23262f;
+  border-radius:12px;
+}
+.upgrade-card-title{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  margin-bottom:8px;
+  font-size:14px;
+  font-weight:700;
+}
+.upgrade-progress-bar{
+  height:8px;
+  width:100%;
+  background:rgba(255,255,255,0.08);
+  border-radius:999px;
+  overflow:hidden;
+  margin:8px 0;
+}
+.upgrade-progress-fill{
+  height:100%;
+  background:linear-gradient(90deg, #5c8cff, #72e0ff);
+  width:0;
+  transition:width .25s ease;
+}
+.upgrade-level-row{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:10px;
+}
+.upgrade-level-row span{
+  font-size:12px;
+  color:#cbd1ea;
+}
+.upgrade-card button{
+  width:100%;
+  margin-top:8px;
+  padding:8px 0;
+  border:none;
+  border-radius:10px;
+  background:#1e2a64;
+  color:#fff;
+  cursor:pointer;
+  font-size:13px;
+}
+.upgrade-card button:disabled{
+  opacity:0.4;
+  cursor:not-allowed;
+}
+.upgrades-note{
+  padding:8px 10px;
+  border:1px solid #23262f;
+  border-radius:10px;
+  background:#0e1120;
+  color:#cbd1ea;
+  font-size:11px;
+  line-height:1.35;
+}
+#upgrades-tokens{
+  padding:6px 10px;
+  background:#11151f;
+  border:1px solid #252a3c;
+  border-radius:10px;
+  text-align:center;
+  margin-bottom:10px;
+  font-size:13px;
+}
 #settings-box{
   width:420px;
   padding:20px;
@@ -294,6 +401,48 @@ canvas{
   font-size:20px;
   font-weight:700;
   color:#fff;
+}
+.inventory-upgrade-card{
+  border:1px solid #2c3f77;
+  border-radius:14px;
+  padding:12px;
+  background:linear-gradient(180deg, #1a2f66 0%, #10254f 100%);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,0.18);
+}
+.inventory-upgrade-header{
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  gap:10px;
+  color:#f4f8ff;
+  font-weight:700;
+  font-size:14px;
+}
+.inventory-upgrade-cost{
+  margin-top:8px;
+  color:#d8e2ff;
+  font-size:13px;
+}
+.inventory-upgrade-btn{
+  margin-top:10px;
+  width:100%;
+  border:none;
+  border-radius:10px;
+  padding:10px 12px;
+  background:linear-gradient(180deg, #84ff5b 0%, #45c528 100%);
+  color:#11310b;
+  font-size:17px;
+  font-weight:700;
+  cursor:pointer;
+}
+.inventory-upgrade-btn:hover{
+  filter:brightness(1.06);
+}
+.inventory-upgrade-btn:disabled{
+  background:#3a3f4d;
+  color:#9da5b7;
+  cursor:not-allowed;
+  filter:none;
 }
 .preview-description,
 .preview-status{

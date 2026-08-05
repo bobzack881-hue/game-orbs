@@ -1,0 +1,68 @@
+{
+  "users": {
+    "testuser1": {
+      "passwordHash": "9b8769a4a742959a2d0298c36fb70623f2dfacda8436237df08d8dfd5b37374c",
+      "highScore": 0,
+      "tokens": 0,
+      "ownedBoost": false,
+      "ownedTeleport": false,
+      "ownedFastFeet": false,
+      "ownedPassive": false,
+      "equipped": [],
+      "stunKey": "e",
+      "boostKey": "Space",
+      "colors": {
+        "player": "#66e",
+        "enemy": "#e34d4d",
+        "wall": "#87cefa",
+        "orb": "#ffd166",
+        "finish": "#2ecc71"
+      },
+      "characterLevel": 0,
+      "boostLevel": 0,
+      "teleportLevel": 0,
+      "fastFeetLevel": 0,
+      "passiveLevel": 0
+    },
+    "rispo": {
+      "passwordHash": "6b86b273ff34fce19d6b804eff5a3f5747ada4eaa22f1d49c01e52ddb7875b4b",
+      "highScore": 10,
+      "tokens": 6,
+      "ownedBoost": true,
+      "ownedTeleport": false,
+      "ownedFastFeet": true,
+      "ownedPassive": false,
+      "equipped": [
+        "boost",
+        "fastFeet"
+      ],
+      "stunKey": "e",
+      "boostKey": "Space",
+      "colors": {
+        "player": "#6666ee",
+        "enemy": "#e34d4d",
+        "wall": "#87cefa",
+        "orb": "#ffd166",
+        "finish": "#2ecc71"
+      },
+      "characterLevel": 0,
+      "boostLevel": 0,
+      "teleportLevel": 0,
+      "fastFeetLevel": 0,
+      "passiveLevel": 0
+    }
+  },
+  "sessions": {
+    "9QNEp_-IQ9OojtZx0altiuSZwuA_aKoL": "testuser1",
+    "RoeONjJxeah3yQNfqTx4SDYXJ0hCGLe2": "testuser1",
+    "xvatI3jK5lbPDb5RiBjZEu4bNDtXaBFl": "rispo",
+    "GgTcjrGOpu7aSm0PLgHUgga_Cev--z52": "rispo",
+    "N088CYrmFKJeqh31BKfuAtNxAiQJLdNm": "rispo",
+    "_rOAzerAk15dyUNMy5rroHgTF2WemmXU": "rispo",
+    "Cefiv_xDISYdz9vfFtABv56e9fKNu70k": "rispo",
+    "ZgR57mfPAtpWzRsBw4dNtZ6rugPvPD_a": "rispo",
+    "TTrtVh6m2WJA1D3RyQJSO2PNk--hhMUG": "rispo",
+    "AL2lRTHOzGoW-eMkUhpEJKeVKQSzjjdw": "rispo",
+    "efqZVxa_Cb2FNu5haoycq_609W7Zf0tc": "rispo"
+  }
+}
