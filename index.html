@@ -1,0 +1,183 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Orb Collector</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div id="login-overlay">
+    <div id="login-box">
+      <h2>Maze Login</h2>
+      <div class="form-toggle">
+        <button id="login-tab" class="active" type="button">Login</button>
+        <button id="signup-tab" type="button">Sign Up</button>
+      </div>
+      <form id="login-form">
+        <input id="login-user" type="text" placeholder="Username" autocomplete="username">
+        <input id="login-pass" type="password" placeholder="Password" autocomplete="current-password">
+        <button id="login-submit" type="submit">Login</button>
+      </form>
+      <form id="signup-form" class="hidden">
+        <input id="signup-user" type="text" placeholder="Choose username" autocomplete="username">
+        <input id="signup-pass" type="password" placeholder="Choose password" autocomplete="new-password">
+        <button id="signup-submit" type="submit">Create Account</button>
+      </form>
+      <div id="login-status"></div>
+    </div>
+  </div>
+  <div id="hud">Player: <span id="user-name">Guest</span> | Score: <span id="score">0</span> | Lives: <span id="lives">3</span> | High: <span id="high-score">0</span>
+    <span style="margin-left:10px">Mode:
+      <select id="mode-select">
+        <option value="Easy">Easy</option>
+        <option value="Medium" selected>Medium</option>
+        <option value="Hard">Hard</option>
+        <option value="Nightmare">Nightmare</option>
+      </select>
+    </span>
+    <span style="margin-left:10px">Tokens: <span id="tokens">0</span></span>
+    <button id="return-menu" type="button">Menu</button>
+    <button id="open-shop" type="button">Shop</button>
+    <button id="sign-out" type="button">Sign Out</button>
+  </div>
+  <canvas id="game" width="1000" height="800"></canvas>
+  <div id="home-overlay">
+    <div id="home-box">
+      <h2>Orb Maze</h2>
+      <div class="home-row">
+        <div>Tokens: <span id="home-tokens">0</span></div>
+        <div class="home-actions">
+          <button id="home-play" type="button">Play</button>
+          <button id="home-open-shop" type="button">Shop</button>
+          <button id="home-inventory" type="button">Inventory</button>
+          <button id="home-settings" type="button">Settings</button>
+          <button id="home-signout" type="button">Sign Out</button>
+        </div>
+      </div>
+      <div id="home-play-panel" class="panel-hidden">
+        <h3>Select Mode</h3>
+        <div class="mode-row">
+          <label><input type="radio" name="home-mode" value="Easy"> Easy</label>
+          <label><input type="radio" name="home-mode" value="Medium" checked> Medium</label>
+          <label><input type="radio" name="home-mode" value="Hard"> Hard</label>
+          <label><input type="radio" name="home-mode" value="Nightmare"> Nightmare</label>
+        </div>
+        <div class="button-row">
+          <button id="start-game" type="button">Start Game</button>
+          <button id="home-back-main" type="button">Back</button>
+        </div>
+        <div id="home-status" class="status-text"></div>
+      </div>
+      <div id="inventory-panel" class="panel-hidden inventory-panel">
+        <h3>Inventory</h3>
+        <div class="inventory-grid" id="inventory-grid">
+          <button class="item-card" data-item="boost" id="inventory-item-boost">
+            <div class="item-icon">⚡</div>
+            <div class="item-name">Speed Boost</div>
+          </button>
+          <button class="item-card" data-item="teleport" id="inventory-item-teleport">
+            <div class="item-icon">🌀</div>
+            <div class="item-name">Teleport</div>
+          </button>
+          <button class="item-card" data-item="fastFeet" id="inventory-item-fastFeet">
+            <div class="item-icon">🏃</div>
+            <div class="item-name">Fast Feet</div>
+          </button>
+          <button class="item-card" data-item="passive" id="inventory-item-passive">
+            <div class="item-icon">👁️</div>
+            <div class="item-name">No Blindness</div>
+          </button>
+        </div>
+        <div class="preview-card" id="inventory-preview">
+          <div class="preview-title">Select an item</div>
+          <div class="preview-description">Click an ability to view details and equip it.</div>
+          <div class="preview-details" id="inventory-preview-details"></div>
+          <div class="button-row">
+            <button id="inventory-save" type="button">Save</button>
+            <button id="inventory-close" type="button">Close</button>
+            <button id="inventory-back-main" type="button">Back</button>
+          </div>
+          <div id="inventory-status" class="status-text"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div id="settings-overlay">
+    <div id="settings-box">
+      <div class="shop-header">
+        <div class="shop-title">Settings</div>
+        <button id="settings-close-btn" class="close-btn" type="button">×</button>
+      </div>
+      <div class="settings-content">
+        <div class="settings-grid">
+          <label for="player-color-picker">Player Color</label>
+          <input type="color" id="player-color-picker" value="#66e">
+          <label for="enemy-color-picker">Enemy Color</label>
+          <input type="color" id="enemy-color-picker" value="#e34d4d">
+          <label for="wall-color-picker">Wall Color</label>
+          <input type="color" id="wall-color-picker" value="#87cefa">
+          <label for="orb-color-picker">Orb Color</label>
+          <input type="color" id="orb-color-picker" value="#ffd166">
+          <label for="finish-color-picker">Finish Color</label>
+          <input type="color" id="finish-color-picker" value="#2ecc71">
+        </div>
+        <div class="button-row">
+          <button id="settings-save" type="button">Save</button>
+          <button id="settings-back-main" type="button" class="back-btn">Back</button>
+        </div>
+        <div id="settings-status" class="status-text"></div>
+      </div>
+    </div>
+  </div>
+  <div id="shop-overlay">
+    <div id="shop-box">
+      <div class="shop-header">
+        <div class="shop-title">SHOP</div>
+        <button id="shop-close-btn" class="close-btn" type="button">×</button>
+      </div>
+      <div class="shop-tokens">Tokens: <span id="shop-tokens">0</span></div>
+      <div class="shop-content">
+        <div class="shop-list" id="shop-list">
+          <button class="shop-item-card" data-shop-item="boost" id="shop-item-boost">
+            <div class="shop-icon">⚡</div>
+            <div>
+              <div class="shop-item-name">Speed Boost</div>
+              <div class="shop-item-cost">10 Tokens</div>
+            </div>
+          </button>
+          <button class="shop-item-card" data-shop-item="teleport" id="shop-item-teleport">
+            <div class="shop-icon">🌀</div>
+            <div>
+              <div class="shop-item-name">Teleport</div>
+              <div class="shop-item-cost">100 Tokens</div>
+            </div>
+          </button>
+          <button class="shop-item-card" data-shop-item="fastFeet" id="shop-item-fastFeet">
+            <div class="shop-icon">🏃</div>
+            <div>
+              <div class="shop-item-name">Fast Feet</div>
+              <div class="shop-item-cost">25 Tokens</div>
+            </div>
+          </button>
+          <button class="shop-item-card" data-shop-item="passive" id="shop-item-passive">
+            <div class="shop-icon">👁️</div>
+            <div>
+              <div class="shop-item-name">No Blindness</div>
+              <div class="shop-item-cost">50 Tokens</div>
+            </div>
+          </button>
+        </div>
+        <div class="shop-preview" id="shop-preview">
+          <div class="preview-title" id="shop-preview-title">Select an item</div>
+          <div class="preview-description" id="shop-preview-description">Pick an item to view details and purchase it.</div>
+          <div class="preview-status" id="shop-preview-status"></div>
+          <button id="shop-buy-btn" type="button" class="buy-btn" disabled>Buy</button>
+          <button id="shop-back-main" type="button" class="back-btn">Back</button>
+        </div>
+      </div>
+    </div>
+  </div>
+  <script src="game.js"></script>
+</body>
+</html>
