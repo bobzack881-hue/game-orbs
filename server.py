@@ -6,13 +6,29 @@ import pathlib
 import secrets
 import hashlib
 
-DATA_FILE = pathlib.Path(__file__).parent / 'users.json'
+def resolve_data_file():
+    env_override = os.environ.get('ORB_DATA_FILE', '').strip()
+    if env_override:
+        return pathlib.Path(env_override)
+
+    # Hosted environments can have read-only source dirs; use /tmp when PORT is set.
+    if os.environ.get('PORT'):
+        return pathlib.Path('/tmp/game-orbs-users.json')
+
+    return pathlib.Path(__file__).parent / 'users.json'
+
+
+DATA_FILE = resolve_data_file()
 
 if not DATA_FILE.exists():
-    DATA_FILE.write_text(json.dumps({'users': {}, 'sessions': {}}))
+    DATA_FILE.parent.mkdir(parents=True, exist_ok=True)
+    DATA_FILE.write_text(json.dumps({'users': {}, 'sessions': {}}), encoding='utf-8')
 
 with open(DATA_FILE, 'r', encoding='utf-8') as f:
-    data = json.load(f)
+    try:
+        data = json.load(f)
+    except Exception:
+        data = {'users': {}, 'sessions': {}}
 
 USERS = data.get('users', {})
 SESSIONS = data.get('sessions', {})
@@ -176,7 +192,7 @@ class APIHandler(SimpleHTTPRequestHandler):
 
 
 if __name__ == '__main__':
-    port = 8000
+    port = int(os.environ.get('PORT', '8000'))
     server_address = ('', port)
     print(f'Starting server at http://localhost:{port}')
     HTTPServer(server_address, APIHandler).serve_forever()
