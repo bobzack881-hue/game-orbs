@@ -61,6 +61,104 @@ DEFAULT_USER_STATE = {
 }
 
 
+def score_user_value(user):
+    owned_count = sum(1 for k in ['ownedBoost', 'ownedTeleport', 'ownedFastFeet', 'ownedPassive'] if user.get(k))
+    levels_total = sum(int(user.get(k, 0) or 0) for k in [
+        'characterLevel', 'speedLevel', 'tokenLevel', 'cooldownLevel',
+        'boostLevel', 'teleportLevel', 'fastFeetLevel', 'passiveLevel'
+    ])
+    return (
+        int(user.get('highScore', 0) or 0),
+        int(user.get('tokens', 0) or 0),
+        owned_count,
+        levels_total,
+    )
+
+
+def merge_user_records(records):
+    merged = dict(DEFAULT_USER_STATE)
+
+    # Keep richest stats across duplicates.
+    merged['highScore'] = max(int(r.get('highScore', 0) or 0) for r in records)
+    merged['tokens'] = max(int(r.get('tokens', 0) or 0) for r in records)
+
+    for key in ['ownedBoost', 'ownedTeleport', 'ownedFastFeet', 'ownedPassive']:
+      merged[key] = any(bool(r.get(key, False)) for r in records)
+
+    for key in ['characterLevel', 'speedLevel', 'tokenLevel', 'cooldownLevel', 'boostLevel', 'teleportLevel', 'fastFeetLevel', 'passiveLevel']:
+      merged[key] = max(int(r.get(key, 0) or 0) for r in records)
+
+    equipped = []
+    seen = set()
+    for r in records:
+      for item in r.get('equipped', []) or []:
+        if item not in seen:
+          seen.add(item)
+          equipped.append(item)
+    merged['equipped'] = equipped
+
+    # Prefer values from the richest record for settings fields.
+    richest = max(records, key=score_user_value)
+    merged['stunKey'] = richest.get('stunKey', 'e')
+    merged['boostKey'] = richest.get('boostKey', 'Space')
+    merged['colors'] = richest.get('colors', DEFAULT_USER_STATE['colors'])
+
+    # Preserve all legacy hashes so users can still log in.
+    all_hashes = []
+    for r in records:
+      h = r.get('passwordHash')
+      if h and h not in all_hashes:
+        all_hashes.append(h)
+      for extra in r.get('passwordHashes', []) or []:
+        if extra and extra not in all_hashes:
+          all_hashes.append(extra)
+    merged['passwordHash'] = all_hashes[0] if all_hashes else ''
+    merged['passwordHashes'] = all_hashes
+
+    return merged
+
+
+def normalize_duplicate_usernames():
+    groups = {}
+    for username in list(USERS.keys()):
+        groups.setdefault(username.lower(), []).append(username)
+
+    changed = False
+    for _, names in groups.items():
+        if len(names) <= 1:
+            user = USERS.get(names[0])
+            if user and user.get('passwordHash') and not user.get('passwordHashes'):
+                user['passwordHashes'] = [user['passwordHash']]
+                USERS[names[0]] = user
+                changed = True
+            continue
+
+        records = [USERS[name] for name in names if name in USERS]
+        if not records:
+            continue
+
+        # Keep the best account as canonical.
+        canonical = max(names, key=lambda n: score_user_value(USERS[n]))
+        USERS[canonical] = merge_user_records(records)
+
+        for name in names:
+            if name == canonical:
+                continue
+            if name in USERS:
+                del USERS[name]
+                changed = True
+
+            for token, token_user in list(SESSIONS.items()):
+                if token_user == name:
+                    SESSIONS[token] = canonical
+                    changed = True
+
+        changed = True
+
+    if changed:
+        save_data()
+
+
 def save_data():
     with open(DATA_FILE, 'w', encoding='utf-8') as f:
         json.dump({'users': USERS, 'sessions': SESSIONS}, f, indent=2)
@@ -99,15 +197,29 @@ def find_username_for_login(username, password):
 
     # Prefer exact-case username first for predictable behavior.
     exact_user = USERS.get(requested)
-    if exact_user and exact_user.get('passwordHash') == hash_password(password):
-        return requested
+    if exact_user:
+        allowed_hashes = list(exact_user.get('passwordHashes', []) or [])
+        if exact_user.get('passwordHash') and exact_user['passwordHash'] not in allowed_hashes:
+            allowed_hashes.insert(0, exact_user['passwordHash'])
+        if hash_password(password) in allowed_hashes:
+            return requested
 
     target = requested.lower()
     pwd_hash = hash_password(password)
     for existing, user in USERS.items():
-        if existing.lower() == target and user.get('passwordHash') == pwd_hash:
+        if existing.lower() != target:
+            continue
+
+        allowed_hashes = list(user.get('passwordHashes', []) or [])
+        if user.get('passwordHash') and user['passwordHash'] not in allowed_hashes:
+            allowed_hashes.insert(0, user['passwordHash'])
+        if pwd_hash in allowed_hashes:
             return existing
+
     return None
+
+
+normalize_duplicate_usernames()
 
 
 class APIHandler(SimpleHTTPRequestHandler):
