@@ -81,9 +81,6 @@ function resolveApiBaseUrl(){
     return normalized;
   }
 
-  const stored = normalizeApiBase(localStorage.getItem('orbMazeApiBaseUrl'));
-  if(stored) return stored;
-
   if(typeof window.ORB_API_BASE_URL === 'string' && window.ORB_API_BASE_URL.trim()){
     return normalizeApiBase(window.ORB_API_BASE_URL);
   }
@@ -97,6 +94,9 @@ function resolveApiBaseUrl(){
   if(knownFrontendHosts.has(host)){
     return 'https://game-orbs-api.onrender.com';
   }
+
+  const stored = normalizeApiBase(localStorage.getItem('orbMazeApiBaseUrl'));
+  if(stored) return stored;
 
   if(window.location.protocol === 'file:') return 'http://localhost:8000';
   return '';
